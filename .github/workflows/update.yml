@@ -8,6 +8,9 @@ on:
   workflow_dispatch:      # 画面から手で回せる
   push:
     branches: [main]      # ページを直したときも焼き直す
+    # この中で自分が書き戻すコミットでは、これは動かない
+    # （GitHub が用意する権限での push は、ワークフローを呼ばない決まり）。
+    # なので堂々巡りにはならない。
 
 # 取ってきたデータを自分のリポジトリに書き戻すため
 permissions:
@@ -76,6 +79,9 @@ jobs:
         with:
           ref: main
       - uses: actions/configure-pages@v5
+        with:
+          # 初回に Pages を自分で有効にする（設定画面を触らなくてよい）
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
