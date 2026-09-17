@@ -81,6 +81,16 @@ Mリーグの選手を4人ずつ2組に分けて、**合計スコアを比べる
 | `run-selftest.js` | 画面の計算を、ブラウザ無しで検査する |
 | `.github/workflows/update.yml` | 毎朝の自動更新 |
 
+## 置き直すときに要る、たった1つの手作業
+
+**GitHub Pages の有効化だけは、設定画面で人がやる。**
+Settings → Pages → Build and deployment → Source を **`GitHub Actions`** にする。
+
+ワークフローから自動で有効にすることはできない（`Create Pages site failed:
+Resource not accessible by integration` で落ちる）。1回やれば以後は不要。
+
+---
+
 ## 手元で動かす
 
 ```
