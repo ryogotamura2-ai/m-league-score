@@ -1,0 +1,83 @@
+name: 成績を取り直してサイトを更新
+
+on:
+  schedule:
+    # 毎朝 7:00 JST を狙う（= 22:00 UTC 前日）。GitHub Actions の実行は
+    # 最大30分ほど遅れることがあるので、少し早めに置いてある。
+    - cron: "40 21 * * *"
+  workflow_dispatch:      # 画面から手で回せる
+  push:
+    branches: [main]      # ページを直したときも焼き直す
+
+# 取ってきたデータを自分のリポジトリに書き戻すため
+permissions:
+  contents: write
+
+concurrency:
+  group: update-stats
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: リポジトリを取得
+        uses: actions/checkout@v4
+
+      - name: Python を用意
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 依存を入れる
+        run: pip install -r scripts/requirements.txt
+
+      - name: 成績を取り直す
+        # 公式 → GitHubの配布データ → Gemini の順に試し、
+        # 検算（全選手のポイント合計が0）を通ったものだけを書き出す。
+        # 落ちたら古いデータのまま先へ進まない。
+        run: python scripts/fetch_stats.py --source auto
+
+      - name: ページに焼き込む
+        run: python scripts/embed_stats.py
+
+      - name: 計算と解析の検査
+        run: |
+          node run-selftest.js
+          python scripts/test_parse.py
+          python scripts/test_sources.py
+
+      - name: 変わっていたらコミットする
+        run: |
+          if [ -z "$(git status --porcelain data index.html)" ]; then
+            echo "前回から数字が変わっていないので、コミットしない"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data index.html
+          git commit -m "成績を更新（$(date -u -d '+9 hours' '+%Y-%m-%d %H:%M') JST 時点）"
+          git push
+
+  deploy:
+    needs: update
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: リポジトリを取得（更新後の中身）
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4

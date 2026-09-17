@@ -1,0 +1,1062 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mリーグ 個人スコア集計</title>
+<style>
+/* ============================================================
+   色トークン（配色はここ1箇所だけで管理する。SVGにも直書きしない）
+   ============================================================ */
+:root {
+  color-scheme: light;
+  --bg:        #f6f6f3;
+  --surface:   #ffffff;
+  --surface-2: #fbfbf9;
+  --border:    #e3e3dc;
+  --border-2:  #cfcfc6;
+  --text:      #1b1b19;
+  --text-2:    #55554f;
+  --muted:     #85857d;
+  --accent:    #1f5aa8;
+  --accent-bg: #e8f0fb;
+  --good:      #2e7250;
+  --good-bg:   #e8f3ec;
+  --warn:      #96601a;
+  --warn-bg:   #fdf3e2;
+  --bad:       #a83a37;
+  --bad-bg:    #fceceb;
+  --teamA:     #1f5aa8;
+  --teamA-bg:  #e8f0fb;
+  --teamB:     #a8531f;
+  --teamB-bg:  #fbefe6;
+  --mark:      #f3e3a8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg:        #16171a;
+    --surface:   #1e2024;
+    --surface-2: #24262b;
+    --border:    #34373d;
+    --border-2:  #44474f;
+    --text:      #e9e9e4;
+    --text-2:    #b6b7b2;
+    --muted:     #8a8c88;
+    --accent:    #7aaeee;
+    --accent-bg: #1e2b3d;
+    --good:      #71c295;
+    --good-bg:   #1c2f25;
+    --warn:      #e0ab63;
+    --warn-bg:   #33291a;
+    --bad:       #e88a85;
+    --bad-bg:    #351f1e;
+    --teamA:     #7aaeee;
+    --teamA-bg:  #1e2b3d;
+    --teamB:     #e5a271;
+    --teamB-bg:  #33251a;
+    --mark:      #4a4020;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg:#16171a; --surface:#1e2024; --surface-2:#24262b; --border:#34373d; --border-2:#44474f;
+  --text:#e9e9e4; --text-2:#b6b7b2; --muted:#8a8c88; --accent:#7aaeee; --accent-bg:#1e2b3d;
+  --good:#71c295; --good-bg:#1c2f25; --warn:#e0ab63; --warn-bg:#33291a; --bad:#e88a85; --bad-bg:#351f1e;
+  --teamA:#7aaeee; --teamA-bg:#1e2b3d; --teamB:#e5a271; --teamB-bg:#33251a; --mark:#4a4020;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif;
+  font-size: 14px; line-height: 1.7;
+  padding: 0 16px 64px;
+}
+.wrap { max-width: 880px; margin: 0 auto; }
+h1 { font-size: 20px; margin: 28px 0 4px; letter-spacing: .01em; }
+h2 { font-size: 15px; margin: 34px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+h3 { font-size: 13px; margin: 18px 0 6px; color: var(--text-2); }
+p  { margin: 8px 0; }
+.sub { color: var(--muted); font-size: 12.5px; margin: 0 0 4px; }
+.disclaimer { font-size: 12px; line-height: 1.6; color: var(--text-2); background: var(--surface-2);
+              border: 1px solid var(--border); border-left: 3px solid var(--warn);
+              border-radius: 6px; padding: 9px 12px; margin: 12px 0 0; }
+.disclaimer a { color: var(--accent); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.note { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+        padding: 10px 12px; font-size: 12.5px; color: var(--text-2); }
+.warnbox { background: var(--warn-bg); border: 1px solid var(--warn); border-radius: 8px;
+           padding: 10px 12px; font-size: 12.5px; color: var(--text); margin: 10px 0; }
+.badbox  { background: var(--bad-bg); border: 1px solid var(--bad); border-radius: 8px;
+           padding: 10px 12px; font-size: 12.5px; color: var(--text); margin: 10px 0; }
+.num { font-variant-numeric: tabular-nums; }
+.pos { color: var(--good); }
+.neg { color: var(--bad); }
+.muted { color: var(--muted); }
+
+/* 対決 */
+.versus { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: stretch; margin-top: 12px; }
+.side { border-radius: 10px; border: 2px solid var(--border); background: var(--surface); padding: 14px; min-width: 0; }
+.side.a { border-color: var(--teamA); background: var(--teamA-bg); }
+.side.b { border-color: var(--teamB); background: var(--teamB-bg); }
+.side.lead { box-shadow: 0 0 0 3px var(--mark); }
+.side .label { font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+.side.a .label { color: var(--teamA); }
+.side.b .label { color: var(--teamB); }
+.side .total { font-size: 30px; font-weight: 700; line-height: 1.2; margin: 2px 0 2px; font-variant-numeric: tabular-nums; }
+.side .meta { font-size: 11.5px; color: var(--text-2); }
+.vs { display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 12px; padding: 0 2px; }
+.vs .diff { font-size: 15px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) {
+  .versus { grid-template-columns: 1fr; }
+  .vs { flex-direction: row; gap: 8px; padding: 2px 0; }
+}
+
+/* 表 */
+.tablewrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 9px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child, th.l, td.l { text-align: left; }
+thead th { color: var(--text-2); font-weight: 600; font-size: 12px; border-bottom: 1px solid var(--border-2); }
+thead th.sortable { cursor: pointer; user-select: none; }
+thead th.sortable:hover { color: var(--accent); }
+thead th .arrow { color: var(--muted); font-size: 10px; }
+tbody tr.target { background: var(--accent-bg); }
+tbody tr.dimmed td { color: var(--muted); }
+td.rank { color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip { display: inline-block; font-size: 10.5px; padding: 0 5px; border-radius: 999px; margin-left: 6px;
+        border: 1px solid currentColor; vertical-align: 1px; }
+.chip.a { color: var(--teamA); }
+.chip.b { color: var(--teamB); }
+
+/* カスタム編成 */
+.lineups { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+/* 格子の枠は既定で「中身より狭くならない」。これを外さないと、中の表が
+   枠を押し広げてページ全体に横スクロールが出る（表は .tablewrap の中だけで
+   横に流れてほしい）。 */
+.lineups > * { min-width: 0; }
+@media (max-width: 560px) { .lineups { grid-template-columns: 1fr; } }
+.lineup { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: var(--surface); }
+.lineup h3 { margin: 0 0 8px; }
+.lineup select { width: 100%; margin-bottom: 6px; padding: 6px 8px; font-size: 13px;
+                 border: 1px solid var(--border-2); border-radius: 6px;
+                 background: var(--surface-2); color: var(--text); font-family: inherit; }
+.lineup select.dup { border-color: var(--bad); background: var(--bad-bg); }
+.lineup .sum { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.btnrow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+button { font: inherit; font-size: 13px; padding: 6px 14px; border-radius: 7px; cursor: pointer;
+         border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text); }
+button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* 自己点検 */
+.st-row { display: grid; grid-template-columns: 30px minmax(0,1fr); gap: 2px 8px; font-size: 12.5px;
+          padding: 3px 0; border-bottom: 1px solid var(--border); }
+.st-row .d { grid-column: 2; color: var(--muted); font-size: 11.5px; }
+footer { margin-top: 40px; color: var(--muted); font-size: 12px; }
+
+/* 更新まわり */
+#updater:empty { display: none; }
+.upd { border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2);
+       padding: 12px 14px; margin: 14px 0 4px; }
+.upd .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.upd .ttl { font-size: 13px; font-weight: 600; }
+.upd select { font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 6px;
+              border: 1px solid var(--border-2); background: var(--surface); color: var(--text); }
+.upd button.go { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.upd button[disabled] { opacity: .55; cursor: default; }
+.upd .state { font-size: 12.5px; color: var(--text-2); }
+.upd pre { margin: 8px 0 0; padding: 8px 10px; background: var(--surface); border-radius: 6px;
+           border: 1px solid var(--border); font-size: 11.5px; line-height: 1.5;
+           max-height: 190px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+details#selftest-box { margin-top: 34px; border-top: 1px solid var(--border); padding-top: 10px; }
+details#selftest-box > summary { cursor: pointer; font-size: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<script type="application/json" id="ml-data">
+{"source_url":"https://m-league.jp/stats/","fetched_at":"2026-09-17T12:09:04+09:00","season_label":"2026-27","stage":"regular","teams":[{"name":"EARTH JETS","id":"T011","players":[{"name":"石井一馬","team":"EARTH JETS","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"三浦智博","team":"EARTH JETS","raw":{"試合数":"1","総局数":"9","ポイント":"-48.1","平着":"4","1位":"0","2位":"0","3位":"0","4位":"1","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"11900","平均打点":"3900","副露率":"0.22","リーチ率":"0.11","アガリ率":"0.11","放銃率":"0.11","放銃平均打点":"8000"},"games":1,"hands":9,"points":-48.1,"avg_rank":4.0,"rank1":0,"rank2":0,"rank3":0,"rank4":1,"top_rate":0.0,"top2_rate":0.0,"last_avoid_rate":0.0,"best_score":11900.0,"avg_win_points":3900.0,"call_rate":22.0,"riichi_rate":11.0,"win_rate":11.0,"deal_in_rate":11.0,"avg_deal_in_points":8000.0},{"name":"逢川恵夢","team":"EARTH JETS","raw":{"試合数":"1","総局数":"12","ポイント":"58","平着":"1","1位":"1","2位":"0","3位":"0","4位":"0","トップ率":"1","連対率":"1","ラス回避率":"1","ベストスコア":"38000","平均打点":"4425","副露率":"0.08","リーチ率":"0.25","アガリ率":"0.33","放銃率":"0","放銃平均打点":"0"},"games":1,"hands":12,"points":58.0,"avg_rank":1.0,"rank1":1,"rank2":0,"rank3":0,"rank4":0,"top_rate":100.0,"top2_rate":100.0,"last_avoid_rate":100.0,"best_score":38000.0,"avg_win_points":4425.0,"call_rate":8.0,"riichi_rate":25.0,"win_rate":33.0,"deal_in_rate":0.0,"avg_deal_in_points":0.0},{"name":"HIRO柴田","team":"EARTH JETS","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null}]},{"name":"KADOKAWAサクラナイツ","id":"T008","players":[{"name":"岡田紗佳","team":"KADOKAWAサクラナイツ","raw":{"試合数":"1","総局数":"14","ポイント":"-81.8","平着":"4","1位":"0","2位":"0","3位":"0","4位":"1","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"-21800","平均打点":"0","副露率":"0.21","リーチ率":"0.21","アガリ率":"0","放銃率":"0.14","放銃平均打点":"10000"},"games":1,"hands":14,"points":-81.8,"avg_rank":4.0,"rank1":0,"rank2":0,"rank3":0,"rank4":1,"top_rate":0.0,"top2_rate":0.0,"last_avoid_rate":0.0,"best_score":-21800.0,"avg_win_points":0.0,"call_rate":21.0,"riichi_rate":21.0,"win_rate":0.0,"deal_in_rate":14.0,"avg_deal_in_points":10000.0},{"name":"堀慎吾","team":"KADOKAWAサクラナイツ","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"阿久津翔太","team":"KADOKAWAサクラナイツ","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"尻無濱航","team":"KADOKAWAサクラナイツ","raw":{"試合数":"1","総局数":"11","ポイント":"64.9","平着":"1","1位":"1","2位":"0","3位":"0","4位":"0","トップ率":"1","連対率":"1","ラス回避率":"1","ベストスコア":"44900","平均打点":"7350","副露率":"0.27","リーチ率":"0.27","アガリ率":"0.36","放銃率":"0.09","放銃平均打点":"2900"},"games":1,"hands":11,"points":64.9,"avg_rank":1.0,"rank1":1,"rank2":0,"rank3":0,"rank4":0,"top_rate":100.0,"top2_rate":100.0,"last_avoid_rate":100.0,"best_score":44900.0,"avg_win_points":7350.0,"call_rate":27.0,"riichi_rate":27.0,"win_rate":36.0,"deal_in_rate":9.0,"avg_deal_in_points":2900.0}]},{"name":"U-NEXT Pirates","id":"T007","players":[{"name":"瑞原明奈","team":"U-NEXT Pirates","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"鈴木優","team":"U-NEXT Pirates","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"仲林圭","team":"U-NEXT Pirates","raw":{"試合数":"1","総局数":"12","ポイント":"3.8","平着":"2","1位":"0","2位":"1","3位":"0","4位":"0","トップ率":"0","連対率":"1","ラス回避率":"1","ベストスコア":"23800","平均打点":"0","副露率":"0.16","リーチ率":"0.08","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":1,"hands":12,"points":3.8,"avg_rank":2.0,"rank1":0,"rank2":1,"rank3":0,"rank4":0,"top_rate":0.0,"top2_rate":100.0,"last_avoid_rate":100.0,"best_score":23800.0,"avg_win_points":0.0,"call_rate":16.0,"riichi_rate":8.0,"win_rate":0.0,"deal_in_rate":0.0,"avg_deal_in_points":0.0},{"name":"朝倉康心","team":"U-NEXT Pirates","raw":{"試合数":"1","総局数":"9","ポイント":"54.7","平着":"1","1位":"1","2位":"0","3位":"0","4位":"0","トップ率":"1","連対率":"1","ラス回避率":"1","ベストスコア":"34700","平均打点":"8000","副露率":"0.11","リーチ率":"0.33","アガリ率":"0.22","放銃率":"0","放銃平均打点":"0"},"games":1,"hands":9,"points":54.7,"avg_rank":1.0,"rank1":1,"rank2":0,"rank3":0,"rank4":0,"top_rate":100.0,"top2_rate":100.0,"last_avoid_rate":100.0,"best_score":34700.0,"avg_win_points":8000.0,"call_rate":11.0,"riichi_rate":33.0,"win_rate":22.0,"deal_in_rate":0.0,"avg_deal_in_points":0.0}]},{"name":"渋谷ABEMAS","id":"T004","players":[{"name":"多井隆晴","team":"渋谷ABEMAS","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"白鳥翔","team":"渋谷ABEMAS","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"松本吉弘","team":"渋谷ABEMAS","raw":{"試合数":"1","総局数":"9","ポイント":"7.4","平着":"2","1位":"0","2位":"1","3位":"0","4位":"0","トップ率":"0","連対率":"1","ラス回避率":"1","ベストスコア":"27400","平均打点":"8000","副露率":"0.11","リーチ率":"0.55","アガリ率":"0.22","放銃率":"0.11","放銃平均打点":"3900"},"games":1,"hands":9,"points":7.4,"avg_rank":2.0,"rank1":0,"rank2":1,"rank3":0,"rank4":0,"top_rate":0.0,"top2_rate":100.0,"last_avoid_rate":100.0,"best_score":27400.0,"avg_win_points":8000.0,"call_rate":11.0,"riichi_rate":55.0,"win_rate":22.0,"deal_in_rate":11.0,"avg_deal_in_points":3900.0},{"name":"日向藍子","team":"渋谷ABEMAS","raw":{"試合数":"1","総局数":"12","ポイント":"-19.5","平着":"3","1位":"0","2位":"0","3位":"1","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"1","ベストスコア":"20500","平均打点":"6600","副露率":"0.25","リーチ率":"0.41","アガリ率":"0.16","放銃率":"0.25","放銃平均打点":"4333.33"},"games":1,"hands":12,"points":-19.5,"avg_rank":3.0,"rank1":0,"rank2":0,"rank3":1,"rank4":0,"top_rate":0.0,"top2_rate":0.0,"last_avoid_rate":100.0,"best_score":20500.0,"avg_win_points":6600.0,"call_rate":25.0,"riichi_rate":41.0,"win_rate":16.0,"deal_in_rate":25.0,"avg_deal_in_points":4333.33}]},{"name":"赤坂ドリブンズ","id":"T001","players":[{"name":"園田賢","team":"赤坂ドリブンズ","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"鈴木たろう","team":"赤坂ドリブンズ","raw":{"試合数":"1","総局数":"11","ポイント":"-55.2","平着":"4","1位":"0","2位":"0","3位":"0","4位":"1","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"4800","平均打点":"0","副露率":"0.27","リーチ率":"0.09","アガリ率":"0","放銃率":"0.09","放銃平均打点":"1000"},"games":1,"hands":11,"points":-55.2,"avg_rank":4.0,"rank1":0,"rank2":0,"rank3":0,"rank4":1,"top_rate":0.0,"top2_rate":0.0,"last_avoid_rate":0.0,"best_score":4800.0,"avg_win_points":0.0,"call_rate":27.0,"riichi_rate":9.0,"win_rate":0.0,"deal_in_rate":9.0,"avg_deal_in_points":1000.0},{"name":"浅見真紀","team":"赤坂ドリブンズ","raw":{"試合数":"1","総局数":"14","ポイント":"-14.2","平着":"3","1位":"0","2位":"0","3位":"1","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"1","ベストスコア":"25800","平均打点":"12000","副露率":"0.21","リーチ率":"0.35","アガリ率":"0.21","放銃率":"0.07","放銃平均打点":"18000"},"games":1,"hands":14,"points":-14.2,"avg_rank":3.0,"rank1":0,"rank2":0,"rank3":1,"rank4":0,"top_rate":0.0,"top2_rate":0.0,"last_avoid_rate":100.0,"best_score":25800.0,"avg_win_points":12000.0,"call_rate":21.0,"riichi_rate":35.0,"win_rate":21.0,"deal_in_rate":7.0,"avg_deal_in_points":18000.0},{"name":"渡辺太","team":"赤坂ドリブンズ","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null}]},{"name":"セガサミーフェニックス","id":"T005","players":[{"name":"茅森早香","team":"セガサミーフェニックス","raw":{"試合数":"1","総局数":"14","ポイント":"69.7","平着":"1","1位":"1","2位":"0","3位":"0","4位":"0","トップ率":"1","連対率":"1","ラス回避率":"1","ベストスコア":"49700","平均打点":"11775","副露率":"0.21","リーチ率":"0.35","アガリ率":"0.28","放銃率":"0.14","放銃平均打点":"7000"},"games":1,"hands":14,"points":69.7,"avg_rank":1.0,"rank1":1,"rank2":0,"rank3":0,"rank4":0,"top_rate":100.0,"top2_rate":100.0,"last_avoid_rate":100.0,"best_score":49700.0,"avg_win_points":11775.0,"call_rate":21.0,"riichi_rate":35.0,"win_rate":28.0,"deal_in_rate":14.0,"avg_deal_in_points":7000.0},{"name":"醍醐大","team":"セガサミーフェニックス","raw":{"試合数":"1","総局数":"11","ポイント":"13.2","平着":"2","1位":"0","2位":"1","3位":"0","4位":"0","トップ率":"0","連対率":"1","ラス回避率":"1","ベストスコア":"33200","平均打点":"9350","副露率":"0.09","リーチ率":"0.27","アガリ率":"0.18","放銃率":"0","放銃平均打点":"0"},"games":1,"hands":11,"points":13.2,"avg_rank":2.0,"rank1":0,"rank2":1,"rank3":0,"rank4":0,"top_rate":0.0,"top2_rate":100.0,"last_avoid_rate":100.0,"best_score":33200.0,"avg_win_points":9350.0,"call_rate":9.0,"riichi_rate":27.0,"win_rate":18.0,"deal_in_rate":0.0,"avg_deal_in_points":0.0},{"name":"竹内元太","team":"セガサミーフェニックス","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"佐野ひなこ","team":"セガサミーフェニックス","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null}]},{"name":"BEAST X","id":"T010","players":[{"name":"鈴木大介","team":"BEAST X","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"中田花奈","team":"BEAST X","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"下石戟","team":"BEAST X","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"東城りお","team":"BEAST X","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null}]},{"name":"TEAM RAIDEN / 雷電","id":"T006","players":[{"name":"萩原聖人","team":"TEAM RAIDEN / 雷電","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"瀬戸熊直樹","team":"TEAM RAIDEN / 雷電","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"黒沢咲","team":"TEAM RAIDEN / 雷電","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"本田朋広","team":"TEAM RAIDEN / 雷電","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null}]},{"name":"KONAMI 麻雀格闘倶楽部","id":"T003","players":[{"name":"佐々木寿人","team":"KONAMI 麻雀格闘倶楽部","raw":{"試合数":"1","総局数":"9","ポイント":"-14","平着":"3","1位":"0","2位":"0","3位":"1","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"1","ベストスコア":"26000","平均打点":"6750","副露率":"0.22","リーチ率":"0.22","アガリ率":"0.22","放銃率":"0.11","放銃平均打点":"8000"},"games":1,"hands":9,"points":-14.0,"avg_rank":3.0,"rank1":0,"rank2":0,"rank3":1,"rank4":0,"top_rate":0.0,"top2_rate":0.0,"last_avoid_rate":100.0,"best_score":26000.0,"avg_win_points":6750.0,"call_rate":22.0,"riichi_rate":22.0,"win_rate":22.0,"deal_in_rate":11.0,"avg_deal_in_points":8000.0},{"name":"高宮まり","team":"KONAMI 麻雀格闘倶楽部","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"伊達朱里紗","team":"KONAMI 麻雀格闘倶楽部","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"滝沢和典","team":"KONAMI 麻雀格闘倶楽部","raw":{"試合数":"1","総局数":"12","ポイント":"-42.3","平着":"4","1位":"0","2位":"0","3位":"0","4位":"1","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"17700","平均打点":"4550","副露率":"0.08","リーチ率":"0.08","アガリ率":"0.16","放銃率":"0.08","放銃平均打点":"5800"},"games":1,"hands":12,"points":-42.3,"avg_rank":4.0,"rank1":0,"rank2":0,"rank3":0,"rank4":1,"top_rate":0.0,"top2_rate":0.0,"last_avoid_rate":0.0,"best_score":17700.0,"avg_win_points":4550.0,"call_rate":8.0,"riichi_rate":8.0,"win_rate":16.0,"deal_in_rate":8.0,"avg_deal_in_points":5800.0}]},{"name":"EX風林火山","id":"T002","players":[{"name":"二階堂亜樹","team":"EX風林火山","raw":{"試合数":"1","総局数":"11","ポイント":"-22.9","平着":"3","1位":"0","2位":"0","3位":"1","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"1","ベストスコア":"17100","平均打点":"5450","副露率":"0.09","リーチ率":"0.27","アガリ率":"0.18","放銃率":"0.09","放銃平均打点":"5200"},"games":1,"hands":11,"points":-22.9,"avg_rank":3.0,"rank1":0,"rank2":0,"rank3":1,"rank4":0,"top_rate":0.0,"top2_rate":0.0,"last_avoid_rate":100.0,"best_score":17100.0,"avg_win_points":5450.0,"call_rate":9.0,"riichi_rate":27.0,"win_rate":18.0,"deal_in_rate":9.0,"avg_deal_in_points":5200.0},{"name":"勝又健志","team":"EX風林火山","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"永井孝典","team":"EX風林火山","raw":{"試合数":"0","総局数":"0","ポイント":"0","平着":"0","1位":"0","2位":"0","3位":"0","4位":"0","トップ率":"0","連対率":"0","ラス回避率":"0","ベストスコア":"0","平均打点":"0","副露率":"0","リーチ率":"0","アガリ率":"0","放銃率":"0","放銃平均打点":"0"},"games":0,"hands":null,"points":null,"avg_rank":null,"rank1":0,"rank2":0,"rank3":0,"rank4":0,"top_rate":null,"top2_rate":null,"last_avoid_rate":null,"best_score":null,"avg_win_points":null,"call_rate":null,"riichi_rate":null,"win_rate":null,"deal_in_rate":null,"avg_deal_in_points":null},{"name":"内川幸太郎","team":"EX風林火山","raw":{"試合数":"1","総局数":"14","ポイント":"26.3","平着":"2","1位":"0","2位":"1","3位":"0","4位":"0","トップ率":"0","連対率":"1","ラス回避率":"1","ベストスコア":"46300","平均打点":"8875","副露率":"0.35","リーチ率":"0.35","アガリ率":"0.28","放銃率":"0","放銃平均打点":"0"},"games":1,"hands":14,"points":26.3,"avg_rank":2.0,"rank1":0,"rank2":1,"rank3":0,"rank4":0,"top_rate":0.0,"top2_rate":100.0,"last_avoid_rate":100.0,"best_score":46300.0,"avg_win_points":8875.0,"call_rate":35.0,"riichi_rate":35.0,"win_rate":28.0,"deal_in_rate":0.0,"avg_deal_in_points":0.0}]}],"source":"official"}
+</script>
+
+<script>
+/* ============================================================================
+   計算のしんぶ。DOM にも通信にも触らない純粋な関数だけを置く。
+   run-selftest.js がこのブロックをそのまま取り出して走らせるので、
+   ブラウザで動くコードと検査するコードが同じものになる。
+   ============================================================================ */
+'use strict';
+
+var MLCore = (function () {
+
+  /* 選手名の表記ゆれを吸収する。公式は姓名の間に空白を入れる（`白鳥 翔`）。
+     fetch_stats.py の normalize_name と同じ規則にしてある（NFKC → 空白を全部落とす）。 */
+  function normalizeName(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).normalize('NFKC').replace(/\s+/g, '');
+  }
+
+  /* 取得したデータを、選手の平らな配列にする。順番は公式の並びのまま。 */
+  function buildRoster(data) {
+    var out = [];
+    var teams = (data && data.teams) || [];
+    for (var i = 0; i < teams.length; i++) {
+      var t = teams[i];
+      var players = t.players || [];
+      for (var j = 0; j < players.length; j++) {
+        var p = players[j];
+        var key = normalizeName(p.name);
+        if (!key) continue;
+        out.push({
+          key: key,
+          name: key,
+          team: p.team || t.name || '',
+          points: (typeof p.points === 'number') ? p.points : null,
+          games: (typeof p.games === 'number') ? p.games : null,
+          avgRank: (typeof p.avg_rank === 'number') ? p.avg_rank : null,
+          rank1: (typeof p.rank1 === 'number') ? p.rank1 : null
+        });
+      }
+    }
+    return out;
+  }
+
+  function indexRoster(roster) {
+    var m = Object.create(null);
+    for (var i = 0; i < roster.length; i++) m[roster[i].key] = roster[i];
+    return m;
+  }
+
+  /* ポイントの高い順に並べて順位を振る。
+     - 同点は同じ順位にし、次の順位はその人数だけ飛ばす（1,2,2,4）
+     - 未出場（points が null）は順位を付けずに最後へ回す。
+       0 として混ぜると「0ポイントで中位」に見えてしまうため。 */
+  function rankPlayers(roster) {
+    var played = [], notPlayed = [];
+    for (var i = 0; i < roster.length; i++) {
+      (roster[i].points === null ? notPlayed : played).push(roster[i]);
+    }
+    played.sort(function (a, b) {
+      if (b.points !== a.points) return b.points - a.points;
+      return a.name.localeCompare(b.name, 'ja');
+    });
+    var out = [], rank = 0, prev = null;
+    for (var k = 0; k < played.length; k++) {
+      if (prev === null || played[k].points !== prev) rank = k + 1;
+      prev = played[k].points;
+      out.push({ rank: rank, player: played[k] });
+    }
+    notPlayed.sort(function (a, b) { return a.name.localeCompare(b.name, 'ja'); });
+    for (var n = 0; n < notPlayed.length; n++) out.push({ rank: null, player: notPlayed[n] });
+    return out;
+  }
+
+  /* 編成1つ分の合計。未出場は 0 として足すが、その人数は別に返して画面に出す
+     （「まだ出ていない」と「0ポイントだった」を混同させないため）。 */
+  function lineupTotal(index, names) {
+    var members = [], missing = [], notPlayed = 0, points = 0, games = 0;
+    for (var i = 0; i < names.length; i++) {
+      var key = normalizeName(names[i]);
+      if (!key) continue;          // 選んでいない枠。空席であって「見つからない選手」ではない
+      var p = index[key];
+      if (!p) { missing.push(names[i]); continue; }
+      members.push(p);
+      if (p.points === null) notPlayed++; else points += p.points;
+      if (typeof p.games === 'number') games += p.games;
+    }
+    return {
+      members: members,
+      missing: missing,
+      notPlayed: notPlayed,
+      // 公式のポイントは0.1刻みなので、この丸めは足し算で出た浮動小数の
+      // 雑音（0.30000000000000004 のたぐい）を落とすためのもの。
+      points: Math.round(points * 10) / 10,
+      games: games
+    };
+  }
+
+  /* 編成の作りが正しいか。画面に出すための日本語の説明を返す。 */
+  function validateLineup(namesA, namesB, size) {
+    var errors = [];
+    var want = size || 4;
+    var norm = function (arr) {
+      var o = [];
+      for (var i = 0; i < arr.length; i++) { var k = normalizeName(arr[i]); if (k) o.push(k); }
+      return o;
+    };
+    var a = norm(namesA), b = norm(namesB);
+    if (a.length !== want) errors.push('チーム①が' + a.length + '人（' + want + '人にする）');
+    if (b.length !== want) errors.push('チーム②が' + b.length + '人（' + want + '人にする）');
+
+    var dupIn = function (arr, label) {
+      var seen = Object.create(null), dups = [];
+      for (var i = 0; i < arr.length; i++) {
+        if (seen[arr[i]]) { if (dups.indexOf(arr[i]) < 0) dups.push(arr[i]); }
+        seen[arr[i]] = true;
+      }
+      if (dups.length) errors.push(label + 'で同じ選手が重複: ' + dups.join('・'));
+      return dups;
+    };
+    dupIn(a, 'チーム①'); dupIn(b, 'チーム②');
+
+    var both = [];
+    for (var i = 0; i < a.length; i++) if (b.indexOf(a[i]) >= 0 && both.indexOf(a[i]) < 0) both.push(a[i]);
+    if (both.length) errors.push('両チームに同じ選手: ' + both.join('・'));
+
+    return { ok: errors.length === 0, errors: errors, overlap: both };
+  }
+
+  /* 2編成を突き合わせる。 */
+  function compare(index, namesA, namesB) {
+    var A = lineupTotal(index, namesA);
+    var B = lineupTotal(index, namesB);
+    var diff = Math.round((A.points - B.points) * 10) / 10;
+    return {
+      a: A, b: B, diff: diff,
+      leader: diff > 0 ? 'a' : (diff < 0 ? 'b' : null),
+      margin: Math.abs(diff)
+    };
+  }
+
+  /* 表示用。ポイントは常に符号を付け、小数1桁に揃える。
+     丸めは toFixed に任せる。Math.round は負の .5 を 0 方向に倒すので
+     （-3.25 → -3.2 なのに +3.25 → +3.3）、符号で丸め方が変わってしまう。 */
+  function fmtPoints(v) {
+    if (v === null || v === undefined || isNaN(v)) return '—';
+    var s = v.toFixed(1);
+    return (v > 0 ? '+' : '') + s;
+  }
+
+  return {
+    normalizeName: normalizeName,
+    buildRoster: buildRoster,
+    indexRoster: indexRoster,
+    rankPlayers: rankPlayers,
+    lineupTotal: lineupTotal,
+    validateLineup: validateLineup,
+    compare: compare,
+    fmtPoints: fmtPoints
+  };
+})();
+
+/* 指定された2編成。名前だけを持ち、所属や点は取得したデータ側から引く。 */
+var DEFAULT_A = ['白鳥翔', '鈴木優', '竹内元太', '逢川恵夢'];
+var DEFAULT_B = ['伊達朱里紗', '園田賢', '仲林圭', '松本吉弘'];
+
+if (typeof globalThis !== 'undefined') {
+  globalThis.MLCore = MLCore;
+  globalThis.DEFAULT_A = DEFAULT_A;
+  globalThis.DEFAULT_B = DEFAULT_B;
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { MLCore: MLCore, DEFAULT_A: DEFAULT_A, DEFAULT_B: DEFAULT_B };
+}
+</script>
+
+<script>
+/* ============================================================================
+   自己点検。node run-selftest.js でも、画面の一番下でも、同じものが走る。
+   ============================================================================ */
+'use strict';
+
+var SelfTest = (function () {
+  var C = MLCore;
+
+  /* 検査用の作り物。ここの数字は計算の検査のためだけのもの。 */
+  function sample() {
+    return {
+      teams: [
+        { name: 'チーム甲', players: [
+          { name: '白鳥 翔', team: 'チーム甲', points: 100.5, games: 10, avg_rank: 2.1 },
+          { name: '松本 吉弘', team: 'チーム甲', points: -20.0, games: 10, avg_rank: 2.8 },
+          { name: '甲 三郎', team: 'チーム甲', points: 100.5, games: 8, avg_rank: 2.2 },
+          { name: '甲 四郎', team: 'チーム甲', points: null, games: null, avg_rank: null }
+        ]},
+        { name: 'チーム乙', players: [
+          { name: '鈴木 優', team: 'チーム乙', points: 33.3, games: 9, avg_rank: 2.4 },
+          { name: '仲林 圭', team: 'チーム乙', points: -5.5, games: 9, avg_rank: 2.6 },
+          { name: '竹内 元太', team: 'チーム乙', points: 12.0, games: 7, avg_rank: 2.5 },
+          { name: '逢川 恵夢', team: 'チーム乙', points: 0.0, games: 6, avg_rank: 2.5 }
+        ]},
+        { name: 'チーム丙', players: [
+          { name: '伊達 朱里紗', team: 'チーム丙', points: 40.0, games: 8, avg_rank: 2.3 },
+          { name: '園田 賢', team: 'チーム丙', points: -60.2, games: 8, avg_rank: 2.9 }
+        ]}
+      ]
+    };
+  }
+
+  var tests = [];
+  function t(name, fn) { tests.push({ name: name, fn: fn }); }
+  function eq(a, b) { return a === b; }
+
+  t('選手名の空白を落とす（半角・全角とも）', function () {
+    var ok = C.normalizeName('白鳥 翔') === '白鳥翔' &&
+             C.normalizeName('白鳥　翔') === '白鳥翔' &&
+             C.normalizeName('  園田 賢 ') === '園田賢';
+    return { ok: ok, detail: '「白鳥 翔」→「' + C.normalizeName('白鳥 翔') + '」' };
+  });
+
+  t('空・未定義でも落ちない', function () {
+    var ok = C.normalizeName('') === '' && C.normalizeName(null) === '' &&
+             C.normalizeName(undefined) === '';
+    return { ok: ok, detail: '空文字を返す' };
+  });
+
+  t('全チームを1つの名簿にまとめる', function () {
+    var r = C.buildRoster(sample());
+    return { ok: eq(r.length, 10), detail: '選手 ' + r.length + '人（3チーム分）' };
+  });
+
+  t('名簿の名前は空白が落ちている', function () {
+    var r = C.buildRoster(sample());
+    var ok = r[0].name === '白鳥翔' && r.every(function (p) { return p.name.indexOf(' ') < 0; });
+    return { ok: ok, detail: '先頭: ' + r[0].name + '（' + r[0].team + '）' };
+  });
+
+  t('ポイントの高い順に並ぶ', function () {
+    var rank = C.rankPlayers(C.buildRoster(sample()));
+    var ok = rank[0].player.points === 100.5 && rank[1].player.points === 100.5 &&
+             rank[2].player.points === 40.0;
+    return { ok: ok, detail: '1位 ' + C.fmtPoints(rank[0].player.points) +
+                             ' / 3位 ' + C.fmtPoints(rank[2].player.points) };
+  });
+
+  t('同点は同じ順位になり、次は人数分飛ぶ', function () {
+    var rank = C.rankPlayers(C.buildRoster(sample()));
+    var ok = rank[0].rank === 1 && rank[1].rank === 1 && rank[2].rank === 3;
+    return { ok: ok, detail: '順位: ' + rank[0].rank + ', ' + rank[1].rank + ', ' + rank[2].rank };
+  });
+
+  t('未出場は順位を付けず最後に回る', function () {
+    var rank = C.rankPlayers(C.buildRoster(sample()));
+    var last = rank[rank.length - 1];
+    return { ok: last.rank === null && last.player.name === '甲四郎',
+             detail: '最後: ' + last.player.name + '（順位 ' + last.rank + '）' };
+  });
+
+  t('0ポイントは未出場と区別される', function () {
+    var rank = C.rankPlayers(C.buildRoster(sample()));
+    var zero = null;
+    for (var i = 0; i < rank.length; i++) if (rank[i].player.name === '逢川恵夢') zero = rank[i];
+    return { ok: zero !== null && zero.rank !== null && zero.player.points === 0,
+             detail: '逢川恵夢は0ポイントで ' + (zero ? zero.rank : '?') + '位' };
+  });
+
+  t('編成の合計が足し算と一致する', function () {
+    var idx = C.indexRoster(C.buildRoster(sample()));
+    var r = C.lineupTotal(idx, ['白鳥翔', '鈴木優', '竹内元太', '逢川恵夢']);
+    // 100.5 + 33.3 + 12.0 + 0.0 = 145.8
+    return { ok: eq(r.points, 145.8), detail: '合計 ' + C.fmtPoints(r.points) + '（想定 +145.8）' };
+  });
+
+  t('合計に小数の誤差が出ない', function () {
+    var roster = C.buildRoster({ teams: [{ name: 'x', players: [
+      { name: 'a', points: 0.1, games: 1 }, { name: 'b', points: 0.2, games: 1 }
+    ]}]});
+    var r = C.lineupTotal(C.indexRoster(roster), ['a', 'b']);
+    // 素の 0.1 + 0.2 は 0.30000000000000004 になる。丸めてから返している。
+    return { ok: eq(r.points, 0.3), detail: '0.1 + 0.2 = ' + r.points };
+  });
+
+  t('名簿に無い名前は missing に出る（黙って0にしない）', function () {
+    var idx = C.indexRoster(C.buildRoster(sample()));
+    var r = C.lineupTotal(idx, ['白鳥翔', '実在しない人']);
+    return { ok: r.missing.length === 1 && r.missing[0] === '実在しない人' && r.points === 100.5,
+             detail: '見つからない: ' + r.missing.join('・') };
+  });
+
+  t('未出場の人数を別に数える', function () {
+    var idx = C.indexRoster(C.buildRoster(sample()));
+    var r = C.lineupTotal(idx, ['白鳥翔', '甲四郎']);
+    return { ok: r.notPlayed === 1 && r.points === 100.5,
+             detail: '未出場 ' + r.notPlayed + '人 / 合計 ' + C.fmtPoints(r.points) };
+  });
+
+  t('試合数も足し合わせる', function () {
+    var idx = C.indexRoster(C.buildRoster(sample()));
+    var r = C.lineupTotal(idx, ['白鳥翔', '鈴木優']);
+    return { ok: eq(r.games, 19), detail: '10 + 9 = ' + r.games };
+  });
+
+  t('指定の2編成でどちらが上かを出す', function () {
+    var idx = C.indexRoster(C.buildRoster(sample()));
+    var c = C.compare(idx, DEFAULT_A, DEFAULT_B);
+    // ①145.8 ②(40.0 - 60.2 - 5.5 - 20.0) = -45.7 → 差 191.5
+    var ok = c.leader === 'a' && Math.abs(c.margin - 191.5) < 1e-9;
+    return { ok: ok, detail: '① ' + C.fmtPoints(c.a.points) + ' / ② ' + C.fmtPoints(c.b.points) +
+                             ' / 差 ' + c.margin };
+  });
+
+  t('同点なら勝ち側なしになる', function () {
+    var roster = C.buildRoster({ teams: [{ name: 'x', players: [
+      { name: 'a', points: 10, games: 1 }, { name: 'b', points: 10, games: 1 }
+    ]}]});
+    var c = C.compare(C.indexRoster(roster), ['a'], ['b']);
+    return { ok: c.leader === null && c.diff === 0, detail: '差 ' + c.diff + ' / 勝ち側 ' + c.leader };
+  });
+
+  t('4人ちょうどでなければエラーになる', function () {
+    var v = C.validateLineup(['a', 'b', 'c'], ['d', 'e', 'f', 'g'], 4);
+    return { ok: !v.ok && v.errors.length === 1, detail: v.errors.join(' / ') };
+  });
+
+  t('同じチーム内の重複を見つける', function () {
+    var v = C.validateLineup(['a', 'a', 'c', 'd'], ['e', 'f', 'g', 'h'], 4);
+    return { ok: !v.ok && v.errors.join('').indexOf('重複') >= 0, detail: v.errors.join(' / ') };
+  });
+
+  t('両チームにまたがる重複を見つける', function () {
+    var v = C.validateLineup(['a', 'b', 'c', 'd'], ['a', 'f', 'g', 'h'], 4);
+    return { ok: !v.ok && v.overlap.length === 1 && v.overlap[0] === 'a', detail: v.errors.join(' / ') };
+  });
+
+  t('重複がなければ通る', function () {
+    var v = C.validateLineup(DEFAULT_A, DEFAULT_B, 4);
+    return { ok: v.ok && v.errors.length === 0, detail: '指定の2編成は重複なし' };
+  });
+
+  t('空白入りの名前でも重複と判定する', function () {
+    var v = C.validateLineup(['白鳥 翔', 'b', 'c', 'd'], ['白鳥　翔', 'f', 'g', 'h'], 4);
+    return { ok: !v.ok && v.overlap.length === 1, detail: v.errors.join(' / ') };
+  });
+
+  t('ポイントの表記に必ず符号が付く', function () {
+    var ok = C.fmtPoints(12) === '+12.0' && C.fmtPoints(-3.25) === '-3.3' &&
+             C.fmtPoints(0) === '0.0' && C.fmtPoints(null) === '—';
+    return { ok: ok, detail: '+12.0 / -3.3 / 0.0 / —' };
+  });
+
+  t('データが空でも落ちない', function () {
+    var r = C.buildRoster({ teams: [] });
+    var c = C.compare(C.indexRoster(r), DEFAULT_A, DEFAULT_B);
+    return { ok: r.length === 0 && c.a.points === 0 && c.a.missing.length === 4,
+             detail: '全員 missing に入る' };
+  });
+
+  function run() {
+    return tests.map(function (x) {
+      var res;
+      try { res = x.fn(); } catch (e) { res = { ok: false, detail: '例外: ' + e.message }; }
+      return { name: x.name, ok: !!res.ok, detail: res.detail || '' };
+    });
+  }
+
+  return { run: run, tests: tests };
+})();
+
+if (typeof globalThis !== 'undefined') globalThis.SelfTest = SelfTest;
+if (typeof module !== 'undefined' && module.exports) module.exports.SelfTest = SelfTest;
+</script>
+
+<div class="wrap">
+  <h1>Mリーグ 個人スコア集計</h1>
+  <p class="sub" id="head-sub">読み込み中…</p>
+
+  <p class="disclaimer">
+    <strong>このページは非公式です。</strong>
+    株式会社Mリーグ機構および各チームとは関係がありません。個人が趣味で作ったもので、
+    成績は <a href="https://m-league.jp/stats/" target="_blank" rel="noopener noreferrer">M.LEAGUE 公式サイトの成績表</a>
+    から取っています。正確な情報は必ず公式でご確認ください。
+  </p>
+
+  <div id="updater"></div>
+  <div id="app"></div>
+
+  <details id="selftest-box">
+    <summary id="selftest-summary">自己点検</summary>
+    <p class="sub">画面の計算が想定どおりかを、開くたびに確かめている。<code>node run-selftest.js</code> でも同じものが走る。</p>
+    <div class="card" id="selftest"></div>
+  </details>
+
+  <footer id="provenance"></footer>
+</div>
+
+<script>
+/* ============================================================================
+   画面。ここから下は DOM を触る。計算は MLCore にしかない。
+   ============================================================================ */
+'use strict';
+(function () {
+  var C = MLCore;
+  var STORE_KEY = 'm-league-score:lineups:v1';
+
+  function el(tag, attrs, children) {
+    var n = document.createElement(tag);
+    if (attrs) for (var k in attrs) {
+      if (k === 'class') n.className = attrs[k];
+      else if (k === 'text') n.textContent = attrs[k];
+      else n.setAttribute(k, attrs[k]);
+    }
+    (children || []).forEach(function (c) { if (c) n.appendChild(c); });
+    return n;
+  }
+  function txt(s) { return document.createTextNode(s); }
+  function sign(v) { return v === null ? '' : (v > 0 ? 'pos' : (v < 0 ? 'neg' : '')); }
+
+  /* ---- データ読み込み ---------------------------------------------------- */
+  var data;
+  try {
+    data = JSON.parse(document.getElementById('ml-data').textContent);
+  } catch (e) {
+    data = { teams: [], placeholder: true, parseError: e.message };
+  }
+  /* データは後から差し替わる（取次ぎで更新した／保存領域に新しいものがあった）。
+     そのたびに画面を組み直すので、ここは書き換えられる入れ物にしておく。 */
+  var roster, index, hasData, srcInfo;
+  function applyData(d) {
+    data = d || { teams: [] };
+    roster = C.buildRoster(data);
+    index = C.indexRoster(roster);
+    hasData = roster.length > 0;
+    srcInfo = SOURCES[data.source] || null;
+  }
+
+  /* ---- 編成の保存・復元（localStorage は落ちても画面は動かす） ------------ */
+  function loadLineups() {
+    try {
+      var raw = window.localStorage.getItem(STORE_KEY);
+      if (!raw) return null;
+      var v = JSON.parse(raw);
+      if (v && Array.isArray(v.a) && Array.isArray(v.b) && v.a.length === 4 && v.b.length === 4) return v;
+    } catch (e) { /* 使えない環境でも既定の編成で動けばよい */ }
+    return null;
+  }
+  function saveLineups(a, b) {
+    try { window.localStorage.setItem(STORE_KEY, JSON.stringify({ a: a, b: b })); }
+    catch (e) { /* 保存できなくても画面は動く */ }
+  }
+  var saved = loadLineups();
+  var customA = saved ? saved.a.slice() : DEFAULT_A.slice();
+  var customB = saved ? saved.b.slice() : DEFAULT_B.slice();
+
+  /* ---- 取得経路の呼び名。画面に出す言い方をここ1箇所で持つ ---------------- */
+  var SOURCES = {
+    official: { label: '公式サイト', trust: 'ok',
+                note: 'm-league.jp の成績一覧をそのまま読んでいる' },
+    gamedb:   { label: '有志のデータベース', trust: 'warn',
+                note: '公式ではない。GitHubで配られているデータを読んでいる（数字は機械可読なので正確だが、更新は作者次第）' },
+    gemini:   { label: 'Gemini 経由', trust: 'warn',
+                note: '公式ページをGeminiに読ませている。数字が大規模言語モデルを通るので、全選手の合計が0になるかを必ず検算している' }
+  };
+  var OFFICIAL_URL = 'https://m-league.jp/stats/';
+  /* ---- 見出し ------------------------------------------------------------ */
+  var sub = document.getElementById('head-sub');
+  var app = document.getElementById('app');
+
+  function renderHeader() {
+    if (!hasData) {
+      sub.textContent = 'まだデータが入っていない。「今すぐ更新」を押すか、取得スクリプトを回すと数字が入る。';
+      return;
+    }
+    sub.textContent = (data.season_label ? data.season_label + 'シーズン' : 'シーズン不明') +
+      ' ／ 選手 ' + roster.length + '人 ／ ' +
+      (data.fetched_at ? data.fetched_at.replace('T', ' ').slice(0, 16) + ' 時点' : '取得日時不明') +
+      (srcInfo ? ' ／ ' + srcInfo.label : '');
+  }
+
+  function renderBanners() {
+    if (data.synthetic) {
+      app.appendChild(el('div', { class: 'badbox' }, [
+        el('strong', { text: 'この画面の数字は作り物。' }),
+        txt(' 公式から取ったものではなく、画面と計算を確かめるために作った見本。'),
+        el('div', { class: 'muted', text:
+          '本物にするには「今すぐ更新」を押すか、手元で python fetch_stats.py を回す。' })
+      ]));
+    }
+    if (hasData && srcInfo && srcInfo.trust === 'warn') {
+      app.appendChild(el('div', { class: 'warnbox' }, [
+        el('strong', { text: '出どころ: ' + srcInfo.label + '。' }),
+        txt(' ' + srcInfo.note)
+      ]));
+    }
+    if (!hasData) {
+      app.appendChild(el('div', { class: 'warnbox' }, [
+        el('strong', { text: 'データが空。' }),
+        txt(' 「今すぐ更新」を押すか、次を手元で回すと入る:'),
+        el('pre', { text: '  pip install -r requirements.txt\n  python fetch_stats.py\n  python embed_stats.py' })
+      ]));
+    }
+  }
+
+  /* ---- 1. 2組の対決 ------------------------------------------------------ */
+  /* まだ出ていない人数。名簿に無い選手も、この経路なら「未出場」として数える。 */
+  function waiting(total) {
+    return total.notPlayed + (data.partial_roster ? total.missing.length : 0);
+  }
+
+  function lineupCard(side, label, total, lead) {
+    var cls = 'side ' + side + (lead ? ' lead' : '');
+    return el('div', { class: cls }, [
+      el('div', { class: 'label', text: label }),
+      el('div', { class: 'total ' + sign(total.points), text: C.fmtPoints(total.points) }),
+      el('div', { class: 'meta', text:
+        total.members.length + '人 ／ ' + total.games + '試合' +
+        (waiting(total) ? ' ／ 未出場 ' + waiting(total) + '人' : '') })
+    ]);
+  }
+
+  function breakdownTable(total, chipClass) {
+    var tb = el('tbody');
+    total.members.forEach(function (p) {
+      tb.appendChild(el('tr', {}, [
+        el('td', { class: 'l', text: p.name }),
+        el('td', { class: 'l muted', text: p.team }),
+        el('td', { class: 'num ' + sign(p.points), text: C.fmtPoints(p.points) }),
+        el('td', { class: 'num muted', text: p.games === null ? '—' : String(p.games) }),
+        el('td', { class: 'num muted', text: p.avgRank === null ? '—' : p.avgRank.toFixed(2) })
+      ]));
+    });
+    total.missing.forEach(function (name) {
+      tb.appendChild(el('tr', { class: 'dimmed' }, [
+        el('td', { class: 'l', text: name }),
+        el('td', { class: 'l', colspan: '4',
+                   text: data.partial_roster ? 'まだ出場していない' : '取得したデータに見つからない' })
+      ]));
+    });
+    return el('div', { class: 'tablewrap' }, [
+      el('table', {}, [
+        el('thead', {}, [el('tr', {}, [
+          el('th', { class: 'l', text: '選手' }), el('th', { class: 'l', text: '所属' }),
+          el('th', { text: 'ポイント' }), el('th', { text: '試合' }), el('th', { text: '平着' })
+        ])]),
+        tb
+      ])
+    ]);
+  }
+
+  function renderVersus(container, namesA, namesB, labelA, labelB, withBreakdown) {
+    container.textContent = '';
+    var c = C.compare(index, namesA, namesB);
+
+    var allMissing = c.a.missing.concat(c.b.missing);
+    if (allMissing.length && data.partial_roster) {
+      // この経路には出場した選手しか載らない。開幕直後は大半がここに来るので、
+      // 異常としてではなく「まだ出ていない」として出す。
+      container.appendChild(el('div', { class: 'note' }, [
+        el('strong', { text: 'まだ出場していない: ' }),
+        txt(allMissing.join('・')),
+        el('div', { class: 'muted', text:
+          '出どころのデータには出場した選手しか載らない。試合に出れば自動で入る。' })
+      ]));
+    } else if (allMissing.length) {
+      container.appendChild(el('div', { class: 'badbox' }, [
+        el('strong', { text: '名簿に無い選手がいる: ' }),
+        txt(allMissing.join('・')),
+        el('div', { class: 'muted', text:
+          '改名・表記ゆれの可能性がある。合計には入れていない。' })
+      ]));
+    }
+
+    container.appendChild(el('div', { class: 'versus' }, [
+      lineupCard('a', labelA, c.a, c.leader === 'a'),
+      el('div', { class: 'vs' }, [
+        txt('差'),
+        el('div', { class: 'diff', text: c.leader === null ? '±0.0' : C.fmtPoints(c.margin).replace('+', '') }),
+        el('div', { class: 'muted', text: c.leader === null ? '同点' :
+          (c.leader === 'a' ? labelA + 'が上' : labelB + 'が上') })
+      ]),
+      lineupCard('b', labelB, c.b, c.leader === 'b')
+    ]));
+
+    if (withBreakdown) {
+      container.appendChild(el('div', { class: 'lineups' }, [
+        el('div', {}, [el('h3', { text: labelA + ' の内訳' }), breakdownTable(c.a, 'a')]),
+        el('div', {}, [el('h3', { text: labelB + ' の内訳' }), breakdownTable(c.b, 'b')])
+      ]));
+    }
+  }
+
+  var versusBox, rankBox, customBox;
+
+  /* データが差し替わったら、この関数で画面をまるごと組み直す。 */
+  function renderAll() {
+    app.textContent = '';
+    renderHeader();
+    renderBanners();
+
+    app.appendChild(el('h2', { text: '1. 2組の合計スコア' }));
+    app.appendChild(el('p', { class: 'sub', text:
+      '指定の8人を4人ずつに分けた合計。実際の所属チームとは関係なく、この2組で足している。' }));
+    versusBox = el('div');
+    app.appendChild(versusBox);
+    renderVersus(versusBox, DEFAULT_A, DEFAULT_B, 'チーム①', 'チーム②', true);
+
+    app.appendChild(el('h2', { text: '2. 個人スコアランキング' }));
+    app.appendChild(el('p', { class: 'sub', text:
+      '公式にリーグ全体のランキングは無いので、チームごとの成績表を集めてこちらで並べ替えている。見出しを押すと並べ替わる。' }));
+    rankBox = el('div');
+    app.appendChild(rankBox);
+    renderRanking();
+
+    app.appendChild(el('h2', { text: '3. カスタム編成' }));
+    app.appendChild(el('p', { class: 'sub', text:
+      '4人ずつ選び直して合計を比べる。同じ選手を二度選ぶとエラーになる。選んだ内容はこの端末に覚えておく。' }));
+    customBox = el('div');
+    app.appendChild(customBox);
+    renderCustom();
+
+    renderProvenance();
+  }
+
+  var targetSet = Object.create(null);
+  DEFAULT_A.forEach(function (n) { targetSet[C.normalizeName(n)] = 'a'; });
+  DEFAULT_B.forEach(function (n) { targetSet[C.normalizeName(n)] = 'b'; });
+
+  var sortKey = 'points', sortDir = -1;
+
+  function renderRanking() {
+    rankBox.textContent = '';
+    var ranked = C.rankPlayers(roster);
+    var rows = ranked.slice();
+    if (sortKey !== 'points') {
+      rows.sort(function (x, y) {
+        var a = x.player[sortKey], b = y.player[sortKey];
+        if (a === null && b === null) return 0;
+        if (a === null) return 1;      // 値が無いものは常に最後
+        if (b === null) return -1;
+        if (a === b) return x.player.name.localeCompare(y.player.name, 'ja');
+        // 名前は文字列なので引き算できない（NaN になって並べ替えが無言で効かなくなる）。
+        if (typeof a === 'string' || typeof b === 'string') {
+          return String(a).localeCompare(String(b), 'ja') * sortDir;
+        }
+        return (a - b) * sortDir;
+      });
+    } else if (sortDir === 1) {
+      rows = rows.filter(function (r) { return r.rank !== null; }).reverse()
+                 .concat(rows.filter(function (r) { return r.rank === null; }));
+    }
+
+    var cols = [
+      { key: null, label: '順', cls: '' },
+      { key: 'name', label: '選手', cls: 'l' },
+      { key: null, label: '所属', cls: 'l' },
+      { key: 'points', label: 'ポイント', cls: '' },
+      { key: 'games', label: '試合', cls: '' },
+      { key: 'avgRank', label: '平着', cls: '' }
+    ];
+    var hr = el('tr');
+    cols.forEach(function (col) {
+      var arrow = (col.key && col.key === sortKey) ? (sortDir < 0 ? ' ▼' : ' ▲') : '';
+      var th = el('th', { class: col.cls + (col.key ? ' sortable' : ''), text: col.label + arrow });
+      if (col.key) th.addEventListener('click', function () {
+        if (sortKey === col.key) sortDir = -sortDir;
+        else { sortKey = col.key; sortDir = (col.key === 'avgRank' || col.key === 'name') ? 1 : -1; }
+        renderRanking();
+      });
+      hr.appendChild(th);
+    });
+
+    var tb = el('tbody');
+    rows.forEach(function (r) {
+      var p = r.player, mark = targetSet[p.key];
+      var tr = el('tr', mark ? { class: 'target' } : (r.rank === null ? { class: 'dimmed' } : {}));
+      tr.appendChild(el('td', { class: 'rank', text: r.rank === null ? '—' : String(r.rank) }));
+      var nameTd = el('td', { class: 'l' }, [txt(p.name)]);
+      if (mark) nameTd.appendChild(el('span', { class: 'chip ' + mark, text: mark === 'a' ? '①' : '②' }));
+      tr.appendChild(nameTd);
+      tr.appendChild(el('td', { class: 'l muted', text: p.team }));
+      tr.appendChild(el('td', { class: 'num ' + sign(p.points), text: C.fmtPoints(p.points) }));
+      tr.appendChild(el('td', { class: 'num muted', text: p.games === null ? '—' : String(p.games) }));
+      tr.appendChild(el('td', { class: 'num muted', text: p.avgRank === null ? '—' : p.avgRank.toFixed(2) }));
+      tb.appendChild(tr);
+    });
+
+    rankBox.appendChild(el('div', { class: 'tablewrap' }, [
+      el('table', {}, [el('thead', {}, [hr]), tb])
+    ]));
+    if (!rows.length) rankBox.appendChild(el('p', { class: 'muted', text: 'データが無い。' }));
+  }
+
+  function playerOptions(selected) {
+    var key = C.normalizeName(selected);
+    var opts = [el('option', { value: '', text: '（選んでいない）' })];
+
+    // 名簿に無い選手が選ばれている場合も、選択肢として残す。
+    // 消してしまうと、まだ出場していない選手が編成から黙って抜け落ち、
+    // その状態で保存されて戻らなくなる。
+    if (key && !index[key]) {
+      var why = data.partial_roster ? '（まだ出場していない）' : '（名簿に無い）';
+      var ghost = el('option', { value: key, text: selected + why });
+      ghost.setAttribute('selected', 'selected');
+      opts.push(ghost);
+    }
+
+    var sorted = roster.slice().sort(function (a, b) {
+      if (a.team !== b.team) return a.team.localeCompare(b.team, 'ja');
+      return a.name.localeCompare(b.name, 'ja');
+    });
+    sorted.forEach(function (p) {
+      var o = el('option', { value: p.key, text: p.name + '（' + p.team + '）' });
+      if (p.key === key) o.setAttribute('selected', 'selected');
+      opts.push(o);
+    });
+    return opts;
+  }
+
+  function renderCustom() {
+    customBox.textContent = '';
+    var v = C.validateLineup(customA, customB, 4);
+
+    // 赤枠を付ける対象。両チームにまたがる重複だけでなく、
+    // 同じ列の中で二度選んだ場合も印を付ける（合計がその選手を二重に数えるため）。
+    var dupKeys = Object.create(null);
+    v.overlap.forEach(function (k) { dupKeys[k] = true; });
+    [customA, customB].forEach(function (names) {
+      var seen = Object.create(null);
+      names.forEach(function (n) {
+        var k = C.normalizeName(n);
+        if (!k) return;
+        if (seen[k]) dupKeys[k] = true;
+        seen[k] = true;
+      });
+    });
+
+    function column(side, names, label) {
+      var box = el('div', { class: 'lineup' }, [el('h3', { text: label })]);
+      for (var i = 0; i < 4; i++) {
+        (function (slot) {
+          var sel = el('select', {}, playerOptions(names[slot]));
+          if (dupKeys[C.normalizeName(names[slot])]) sel.className = 'dup';
+          sel.addEventListener('change', function () {
+            names[slot] = sel.value;
+            saveLineups(customA, customB);
+            renderCustom();
+          });
+          box.appendChild(sel);
+        })(i);
+      }
+      var total = C.lineupTotal(index, names);
+      var uniq = Object.create(null), dupHere = false;
+      names.forEach(function (n) {
+        var k = C.normalizeName(n);
+        if (!k) return;
+        if (uniq[k]) dupHere = true;
+        uniq[k] = true;
+      });
+      box.appendChild(el('div', { class: 'sum ' + sign(total.points), text: C.fmtPoints(total.points) }));
+      box.appendChild(el('div', { class: 'meta muted', text:
+        total.members.length + '人 ／ ' + total.games + '試合' +
+        (waiting(total) ? ' ／ 未出場 ' + waiting(total) + '人' : '') }));
+      if (dupHere) {
+        box.appendChild(el('div', { class: 'meta neg', text:
+          '同じ選手を二度選んでいるので、この合計は二重に数えている' }));
+      }
+      return box;
+    }
+
+    if (!v.ok) {
+      customBox.appendChild(el('div', { class: 'badbox' }, [
+        el('strong', { text: 'この編成は使えない: ' }), txt(v.errors.join(' ／ '))
+      ]));
+    }
+
+    customBox.appendChild(el('div', { class: 'lineups' }, [
+      column('a', customA, 'チーム①'), column('b', customB, 'チーム②')
+    ]));
+
+    if (v.ok) {
+      var box = el('div');
+      renderVersus(box, customA, customB, 'チーム①', 'チーム②', false);
+      customBox.appendChild(box);
+    }
+
+    var reset = el('button', { text: '指定の編成に戻す' });
+    reset.addEventListener('click', function () {
+      customA = DEFAULT_A.slice(); customB = DEFAULT_B.slice();
+      saveLineups(customA, customB); renderCustom();
+    });
+    var clear = el('button', { text: '全部空にする' });
+    clear.addEventListener('click', function () {
+      customA = ['', '', '', '']; customB = ['', '', '', ''];
+      saveLineups(customA, customB); renderCustom();
+    });
+    customBox.appendChild(el('div', { class: 'btnrow' }, [reset, clear]));
+  }
+
+  /* ---- 自己点検 ---------------------------------------------------------- */
+  var stBox = document.getElementById('selftest');
+  var res = SelfTest.run();
+  var passed = 0;
+  res.forEach(function (r) {
+    if (r.ok) passed++;
+    stBox.appendChild(el('div', { class: 'st-row' }, [
+      el('div', { class: r.ok ? 'pos' : 'neg', text: r.ok ? '合格' : '不合格' }),
+      el('div', { text: r.name }),
+      el('div', { class: 'd', text: r.detail })
+    ]));
+  });
+  var stSummary = document.getElementById('selftest-summary');
+  stSummary.textContent = '自己点検: ' + res.length + '件中 ' + passed + '件 合格';
+  stSummary.className = passed === res.length ? 'pos' : 'neg';
+  if (passed !== res.length) {
+    // 落ちているときは畳まない。気づかれないまま使われるのがいちばん困る。
+    document.getElementById('selftest-box').setAttribute('open', 'open');
+  }
+
+  /* ---- 出どころ ---------------------------------------------------------- */
+  function renderProvenance() {
+  var prov = document.getElementById('provenance');
+  prov.textContent = '';
+  prov.appendChild(el('h2', { text: '出どころ' }));
+  var ul = el('ul');
+  [
+    '取得経路: ' + (srcInfo ? srcInfo.label : '（不明）') + (data.via_model ? '（' + data.via_model + '）' : ''),
+    null,   // 取得元はリンクにして下に出す
+    '取得日時: ' + (data.fetched_at || '（未取得）'),
+    'シーズン: ' + (data.season_label || '（不明）') + '／レギュラーシーズン',
+    'リーグ全体の個人ランキングは公式に無い。チームごとの成績表を集めて、この画面で並べ替えている',
+    '数字は取得した時点の写し。新しくするには取得スクリプトを回して焼き直す',
+    '個人の合計は公式のポイントをそのまま足しただけで、公式の順位とは関係ない'
+  ].concat(srcInfo && srcInfo.trust === 'warn' ? ['★ ' + srcInfo.note] : [])
+   .concat(data.release_tag ? ['データベースの版: ' + data.release_tag] : [])
+   .concat(data.synthetic ? ['★ いま出ている数字は作り物。公式から取ったものではない'] : [])
+   .forEach(function (s) { if (s) ul.appendChild(el('li', { text: s })); });
+
+  var src = el('li', {}, [txt('取得元: ')]);
+  var a = el('a', { href: data.source_url || OFFICIAL_URL, target: '_blank',
+                    rel: 'noopener noreferrer', text: data.source_url || OFFICIAL_URL });
+  src.appendChild(a);
+  ul.insertBefore(src, ul.firstChild ? ul.firstChild.nextSibling : null);
+
+  prov.appendChild(ul);
+  prov.appendChild(el('p', { class: 'muted', text:
+    'このページは個人が趣味で作った非公式のものです。株式会社Mリーグ機構および各チームとは関係がありません。' }));
+  }
+
+  /* ---- 新しいデータの読み込み -------------------------------------------- */
+  var updBox = document.getElementById('updater');
+
+  /* ページには最後に焼き込んだ数字が入っている。そのままでも読めるが、
+     サイトに置いたときは `data/stats.json` のほうが新しいことがある
+     （毎朝の自動更新がそちらを書き替え、ページの再生成が挟まるため）。
+     同じ場所にあるファイルなので、ここは普通に読める。
+     ファイルとして直接開いた場合は読めないが、そのときは焼き込んだ数字で動く。 */
+  function loadLatest() {
+    if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+    fetch('data/stats.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('読めない')); })
+      .then(function (body) {
+        if (!body || !body.teams || !body.teams.length) return;
+        var n = 0;
+        body.teams.forEach(function (t) { n += (t.players || []).length; });
+        if (!n) return;
+        // 焼き込んだものより新しいときだけ差し替える（古い数字で上書きしない）
+        if (!data.fetched_at || String(body.fetched_at || '') > String(data.fetched_at)) {
+          applyData(body);
+          renderAll();
+        }
+      })
+      .catch(function () { /* 焼き込んだ数字のままで問題なく読める */ });
+  }
+
+  /* ---- 組み立て ---------------------------------------------------------- */
+  applyData(data);
+  renderAll();
+  loadLatest();
+})();
+</script>
+
+</body>
+</html>
