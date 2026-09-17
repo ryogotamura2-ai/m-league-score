@@ -78,10 +78,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
+      # Pages の有効化は、リポジトリの設定画面で1回だけ人がやる
+      # （Settings → Pages → Source を「GitHub Actions」にする）。
+      # ここから自動で有効にすることは、権限の都合でできない。
       - uses: actions/configure-pages@v5
-        with:
-          # 初回に Pages を自分で有効にする（設定画面を触らなくてよい）
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
