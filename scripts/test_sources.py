@@ -156,6 +156,137 @@ def test_gamedb() -> None:
             check("無いシーズンは例外で止まる", False, "素通りした")
 
 
+def make_db_v2(path: Path, *, drop: tuple[str, ...] = ()) -> None:
+    """**2026-11 以降の列名**で見本のDBを作る（配布側が列名を付け替えた後の形）。
+
+    `drop` に列名を渡すと、その列を欠かせる（必須の列が消えたときの検査用）。
+    """
+    cols = ["season_start_year", "stage", "player_name", "team_name",
+            "total_game_count", "league_points_total", "rank1_count", "rank2_count",
+            "rank3_count", "rank4_count", "top_per_game_percent", "top2_per_game_percent",
+            "avoid_last_per_game_percent", "best_score", "agari_points_per_agari",
+            "furo_per_kyoku_percent", "reach_per_kyoku_percent", "agari_per_kyoku_percent",
+            "dealin_per_kyoku_percent", "dealin_points_per_dealin"]
+    row = (2026, "regular", "白鳥 翔", "渋谷ABEMAS", 2, 30.0, 2, 0, 0, 0,
+           100.0, 100.0, 100.0, 50.0, 7000.0, 30.0, 20.0, 22.0, 10.0, 5000.0)
+    keep = [i for i, c in enumerate(cols) if c not in drop]
+    con = sqlite3.connect(path)
+    con.execute(f"CREATE TABLE player_season_stage_stats ({','.join(cols[i] for i in keep)})")
+    con.execute(f"INSERT INTO player_season_stage_stats VALUES ({','.join('?' * len(keep))})",
+                [row[i] for i in keep])
+    con.commit(); con.close()
+
+
+def test_gamedb_renamed_columns() -> None:
+    """**配布データが列名を付け替えても読めること。**
+
+    2026-11 に、配布側が列名をまるごと付け替えた（`start_season_year` →
+    `season_start_year`、`win_rate_percent` → `agari_per_kyoku_percent` など）。
+    そのとき `no such column` で落ち、公式の変更とも重なって、毎朝の更新が
+    12日間止まった。新旧どちらの列名でも読めるようにした。
+    """
+    with tempfile.TemporaryDirectory() as d:
+        path = Path(d) / "v2.sqlite3"
+        make_db_v2(path)
+        seasons = gamedb.available_seasons(path)
+        check("新しい列名でもシーズンを出せる", seasons == [(2026, "regular")], str(seasons))
+
+        st = gamedb.load(path)
+        p = [pl for t in st["teams"] for pl in t["players"]][0]
+        check("新しい列名でもポイントを読める", p["points"] == 30.0, f"{p['points']}")
+        check("新しい列名でも試合数を読める", p["games"] == 2)
+        check("新しい列名でも着順を読める", (p["rank1"], p["rank2"]) == (2, 0))
+        check("新しい列名でも率を読める（アガリ率）", p["win_rate"] == 22.0, f"{p['win_rate']}")
+        check("新しい列名でも列の取り違えがない（放銃率と副露率）",
+              p["deal_in_rate"] == 10.0 and p["call_rate"] == 30.0,
+              f"放銃率 {p['deal_in_rate']} / 副露率 {p['call_rate']}")
+        # 見本は1人だけ（ポイント+30）なのでゼロサムにはならない。ここで見るのは
+        # 「着順の内訳と試合数が合う」「重複が無い」といった、形の検算。
+        probs = [x for x in validate.check(st)[0] if "合計" not in x]
+        check("新しい列名の読み込みも形の検算を通る", not probs, "; ".join(probs) or "問題なし")
+
+        # 必須の列が消えたら、黙って None にせず、名前を挙げて止まる
+        path2 = Path(d) / "v2-nopoints.sqlite3"
+        make_db_v2(path2, drop=("league_points_total",))
+        try:
+            gamedb.load(path2)
+        except LookupError as e:
+            msg = str(e)
+            check("必須の列が無ければ名指しで止まる", "points" in msg and "league_points_total" in msg,
+                  msg[:80])
+        else:
+            check("必須の列が無ければ名指しで止まる", False, "素通りした（黙って None にした）")
+
+        # 開始年の列が無い場合も名指し
+        path3 = Path(d) / "v2-noyear.sqlite3"
+        make_db_v2(path3, drop=("season_start_year",))
+        try:
+            gamedb.available_seasons(path3)
+        except LookupError as e:
+            check("開始年の列が無ければ名指しで止まる", "season_start_year" in str(e), str(e)[:80])
+        else:
+            check("開始年の列が無ければ名指しで止まる", False, "素通りした")
+
+
+# ---------------- 公式API ----------------
+
+def test_official_api() -> None:
+    """公式APIの返事の変換。**実際に取った返事**（2026-11-10）に対して検査する。
+
+    公式が成績ページを作り替え、HTMLの表は枠だけで数字はAPIから差し込む作りになった。
+    HTMLを読み続けた結果、毎朝の更新が止まっていた（official_api.py 参照）。
+    """
+    import json
+
+    import official_api
+
+    fx = Path(__file__).resolve().parent / "tests" / "fixtures" / "api-stats-2026-11-10.json"
+    payload = json.loads(fx.read_text(encoding="utf-8"))
+    st = official_api.parse(payload)
+    players = [p for t in st["teams"] for p in t["players"]]
+    by = {p["name"]: p for p in players}
+
+    check("APIの返事: チームが10個", len(st["teams"]) == 10, str(len(st["teams"])))
+    check("APIの返事: 選手が40人", len(players) == 40, str(len(players)))
+    check("APIの返事: シーズンを拾う", st["season_label"] == "2026-27", str(st["season_label"]))
+    check("APIの返事: 段階を拾う", st["stage"] == "regular", str(st["stage"]))
+    check("APIの返事: 選手名の空白が落ちている", "逢川恵夢" in by and "HIRO柴田" in by,
+          str(sorted(by)[:3]))
+    check("APIの返事: 所属が入る", by["逢川恵夢"]["team"] == "EARTH JETS", by["逢川恵夢"]["team"])
+    check("APIの返事: ポイントを読む", by["逢川恵夢"]["points"] == -63.9, str(by["逢川恵夢"]["points"]))
+    check("APIの返事: 試合数を読む", by["逢川恵夢"]["games"] == 11)
+    check("APIの返事: 着順の合計が試合数と合う",
+          sum(by["逢川恵夢"][k] for k in ("rank1", "rank2", "rank3", "rank4")) == by["逢川恵夢"]["games"])
+    # 率は小数（0.1818…）で来る。百分率に直して他の経路と単位をそろえる
+    check("APIの返事: 率は百分率に直す（トップ率 0.1818… → 18.18）",
+          by["逢川恵夢"]["top_rate"] == 18.18, str(by["逢川恵夢"]["top_rate"]))
+    check("APIの返事: 率を百分率に直す（アガリ率 0.16 → 16.0）",
+          by["逢川恵夢"]["win_rate"] == 16.0, str(by["逢川恵夢"]["win_rate"]))
+    check("APIの返事: 生の値を残している", bool(by["逢川恵夢"]["raw"]))
+
+    probs, notes = validate.check(st, expect_teams=10, expect_players=40)
+    check("APIの返事: 実データが検算を通る（ゼロサム）", not probs,
+          "; ".join(probs) or (notes[0] if notes else ""))
+
+    # 形が変わったときは、黙って空にせず例外で止まる
+    for label, bad in (("teams が空", {"stats": {"teams": []}}),
+                       ("stats が無い", {"season": {}}),
+                       ("空の返事", {})):
+        try:
+            official_api.parse(bad)
+        except LookupError:
+            check(f"APIの形が変わったら止まる（{label}）", True)
+        else:
+            check(f"APIの形が変わったら止まる（{label}）", False, "素通りした")
+
+    # 値が無い（null）は 0 にしない
+    pl = official_api.parse({"stats": {"teams": [{"id": "x", "team": "T", "players": ["甲 一"],
+        "metrics": [{"name": "試合数", "values": [None]}, {"name": "ポイント", "values": [None]}]}]}}
+        )["teams"][0]["players"][0]
+    check("APIの返事: 値が null なら None のまま（0 にしない）",
+          pl["points"] is None and pl["games"] is None)
+
+
 # ---------------- Gemini 経路 ----------------
 
 def test_gemini_key_not_in_url() -> None:
@@ -265,6 +396,8 @@ def test_embed_cannot_inject_code() -> None:
 def main() -> int:
     test_validate()
     test_gamedb()
+    test_gamedb_renamed_columns()
+    test_official_api()
     test_gemini_key_not_in_url()
     test_gemini()
     test_embed_cannot_inject_code()

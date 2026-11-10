@@ -1,5 +1,7 @@
 # 公式から取ってきた生HTML。取り直せば戻るものを、公開の場に置き直さない
 data/stats.html
+# 公式APIの返事。同じく取り直せば戻るので置かない
+data/stats.api.json
 # db経路で落としてくるSQLite（展開して約560MB）
 data/gamedb/
 __pycache__/

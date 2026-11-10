@@ -280,7 +280,49 @@ def summarize(stats: dict) -> str:
     return f"チーム {n_teams} / 選手 {n_players}"
 
 
+def _official_from_api(args) -> dict:
+    """公式のAPIから取る。**いまの公式はこちらが本命。**
+
+    公式は成績ページを作り替え、HTMLの表は全員 `0` の枠だけで、数字は後からJavaScriptが
+    APIから差し込む作りになった。HTMLを読んでいた頃は、そのせいで10月30日から毎朝の
+    更新が止まっていた（詳しくは official_api.py）。
+    """
+    import official_api
+
+    payload = official_api.fetch_json("stats")
+    out = Path(args.save_api)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"      APIの返事を保存: {out}")
+    stats = official_api.parse(payload)
+    stats["via"] = "api"
+    return stats
+
+
 def _source_official(args) -> dict:
+    # 保存済みのAPIの返事（.json）から読み直す。通信しない。
+    if args.from_file and Path(args.from_file).suffix.lower() == ".json":
+        import official_api
+
+        payload = json.loads(Path(args.from_file).read_text(encoding="utf-8"))
+        stats = official_api.parse(payload)
+        stats["via"] = "api"
+        stats["source"] = "official"
+        print(f"      保存済みのAPIの返事を読んだ: {args.from_file}")
+        return validate.clear_unplayed(stats)
+
+    # まず公式のAPI。だめなら従来のHTMLの表を読む。
+    if not args.from_file:
+        try:
+            stats = _official_from_api(args)
+            stats["source"] = "official"
+            if args.season:
+                stats["season_code"] = args.season
+            return validate.clear_unplayed(stats)
+        except Exception as e:  # noqa: BLE001
+            print(f"      公式のAPIは使えなかった（{type(e).__name__}: {e}）。HTMLの表を試す",
+                  file=sys.stderr)
+
     if args.from_file:
         src = Path(args.from_file)
         html = src.read_text(encoding="utf-8", errors="replace")
@@ -359,6 +401,8 @@ def main(argv=None) -> int:
     ap.add_argument("--db-refresh", action="store_true", help="db 経路で必ず落とし直す")
     ap.add_argument("--out", default=str(DATA / "stats.json"))
     ap.add_argument("--save-html", default=str(DATA / "stats.html"))
+    ap.add_argument("--save-api", default=str(DATA / "stats.api.json"),
+                    help="公式APIの返事の保存先（取り直さず解析だけやり直すため）")
     ap.add_argument("--expect-teams", type=int, help="この数にならなければ失敗にする")
     ap.add_argument("--expect-players", type=int, help="この数にならなければ失敗にする")
     args = ap.parse_args(argv)

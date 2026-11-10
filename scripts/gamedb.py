@@ -28,25 +28,59 @@ LATEST_URL = "https://github.com/konoui/m-league-game-db/releases/latest/downloa
 SOURCE_PAGE = "https://github.com/konoui/m-league-game-db"
 JST = timezone(timedelta(hours=9), "JST")
 
-# ビューの列 → こちらのキー。公式ページの18項目に対応するものだけを拾う。
+# こちらのキー → ビューの列名の候補（新しい名前が先、旧い名前があとに続く）。
+#
+# **配布データは列名がまるごと付け替わることがある**（2026-11 に起きた:
+# `start_season_year` → `season_start_year`、`win_rate_percent` → `agari_per_kyoku_percent`
+# など）。そのとき黙って壊れて毎朝の更新が止まった。そこで、候補を並べて
+# 「ビューに実際にある列」を選ぶ。どちらの版でも読め、どちらにも無ければ
+# **どの項目が見つからないかを名指しして**止まる。
+#
+# 新旧の対応は、公式APIの値と3人×16項目を突き合わせて、全部一致することを確かめてある。
 COLUMNS = {
-    "total_game_count": "games",
-    "total_points": "points",
-    "rank1_count": "rank1",
-    "rank2_count": "rank2",
-    "rank3_count": "rank3",
-    "rank4_count": "rank4",
-    "top_rate_percent": "top_rate",
-    "top2_rate_percent": "top2_rate",
-    "avoid_last_rate_percent": "last_avoid_rate",
-    "best_score": "best_score",
-    "avg_win_points": "avg_win_points",
-    "furo_rate_percent": "call_rate",
-    "reach_rate_percent": "riichi_rate",
-    "win_rate_percent": "win_rate",
-    "dealin_rate_percent": "deal_in_rate",
-    "avg_dealin_points": "avg_deal_in_points",
+    "games":              ("total_game_count",),
+    "points":             ("league_points_total", "total_points"),
+    "rank1":              ("rank1_count",),
+    "rank2":              ("rank2_count",),
+    "rank3":              ("rank3_count",),
+    "rank4":              ("rank4_count",),
+    "top_rate":           ("top_per_game_percent", "top_rate_percent"),
+    "top2_rate":          ("top2_per_game_percent", "top2_rate_percent"),
+    "last_avoid_rate":    ("avoid_last_per_game_percent", "avoid_last_rate_percent"),
+    "best_score":         ("best_score",),
+    "avg_win_points":     ("agari_points_per_agari", "avg_win_points"),
+    "call_rate":          ("furo_per_kyoku_percent", "furo_rate_percent"),
+    "riichi_rate":        ("reach_per_kyoku_percent", "reach_rate_percent"),
+    "win_rate":           ("agari_per_kyoku_percent", "win_rate_percent"),
+    "deal_in_rate":       ("dealin_per_kyoku_percent", "dealin_rate_percent"),
+    "avg_deal_in_points": ("dealin_points_per_dealin", "avg_dealin_points"),
 }
+
+# シーズン開始年の列名も付け替わった
+YEAR_COLUMNS = ("season_start_year", "start_season_year")
+
+# これが無ければ成績として成り立たない項目。見つからなければ止める。
+REQUIRED = ("games", "points", "rank1", "rank2", "rank3", "rank4")
+
+
+def _pick(columns: set[str], candidates: tuple[str, ...]) -> str | None:
+    """候補のうち、ビューに実在する最初の列名。"""
+    return next((c for c in candidates if c in columns), None)
+
+
+def _view_columns(con) -> set[str]:
+    return {r[1] for r in con.execute("PRAGMA table_info(player_season_stage_stats)")}
+
+
+def _year_column(columns: set[str]) -> str:
+    col = _pick(columns, YEAR_COLUMNS)
+    if col is None:
+        raise LookupError(
+            "配布データのビューに、シーズン開始年の列が見つからない"
+            f"（探した名前: {', '.join(YEAR_COLUMNS)}）。配布側の作りが変わった可能性がある。"
+            f" ビューにある列: {', '.join(sorted(columns)[:12])} …"
+        )
+    return col
 
 
 def latest_tag(timeout: int = 40) -> str | None:
@@ -119,13 +153,32 @@ def ensure_database(cache_dir: Path, *, force: bool = False, timeout: int = 600)
 def available_seasons(db_path: Path) -> list[tuple[int, str]]:
     con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
+        year = _year_column(_view_columns(con))
         rows = con.execute(
-            "SELECT DISTINCT start_season_year, stage FROM player_season_stage_stats"
-            " ORDER BY start_season_year DESC"
+            f"SELECT DISTINCT {year}, stage FROM player_season_stage_stats"
+            f" ORDER BY {year} DESC"
         ).fetchall()
     finally:
         con.close()
     return [(int(y), s) for y, s in rows]
+
+
+def resolve_columns(columns: set[str]) -> dict[str, str | None]:
+    """こちらのキー → ビューに実在する列名。見つからない項目は None。
+
+    **成績として必須の項目（試合数・ポイント・着順）が見つからなければ、
+    名前を挙げて止める。** 黙って None にすると、列名が付け替わったときに
+    「ポイントが1人も入っていない」としか出ず、原因が分からない。
+    """
+    chosen = {key: _pick(columns, cands) for key, cands in COLUMNS.items()}
+    missing = [k for k in REQUIRED if chosen[k] is None]
+    if missing:
+        wanted = "; ".join(f"{k}（探した名前: {', '.join(COLUMNS[k])}）" for k in missing)
+        raise LookupError(
+            f"配布データのビューに、必須の項目が見つからない: {wanted}。"
+            "配布側が列名を付け替えた可能性がある。gamedb.py の COLUMNS に新しい名前を足すこと。"
+        )
+    return chosen
 
 
 def load(db_path: Path, *, season_year: int | None = None, stage: str = "regular") -> dict:
@@ -133,16 +186,19 @@ def load(db_path: Path, *, season_year: int | None = None, stage: str = "regular
     con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     con.row_factory = sqlite3.Row
     try:
+        columns = _view_columns(con)
+        year = _year_column(columns)
+        chosen = resolve_columns(columns)
         if season_year is None:
             row = con.execute(
-                "SELECT MAX(start_season_year) y FROM player_season_stage_stats WHERE stage=?",
+                f"SELECT MAX({year}) y FROM player_season_stage_stats WHERE stage=?",
                 (stage,),
             ).fetchone()
             season_year = row["y"]
             if season_year is None:
                 raise LookupError(f"ステージ '{stage}' のデータが無い")
         rows = con.execute(
-            "SELECT * FROM player_season_stage_stats WHERE start_season_year=? AND stage=?",
+            f"SELECT * FROM player_season_stage_stats WHERE {year}=? AND stage=?",
             (int(season_year), stage),
         ).fetchall()
     finally:
@@ -159,8 +215,8 @@ def load(db_path: Path, *, season_year: int | None = None, stage: str = "regular
             "team": team,
             "raw": {},
         }
-        for col, key in COLUMNS.items():
-            player[key] = r[col] if col in r.keys() else None
+        for key, col in chosen.items():
+            player[key] = r[col] if col is not None else None
         # 平着はこのビューに無いので着順の内訳から出す。総局数は元データに無い。
         player["avg_rank"] = _avg_rank(player)
         player["hands"] = None
